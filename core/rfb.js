@@ -53,8 +53,8 @@ const WHEEL_LINE_HEIGHT = 19; // Assumed pixels for one line step
 // Gesture thresholds
 const GESTURE_ZOOMSENS = 75;
 const GESTURE_SCRLSENS = 50;
-const DOUBLE_TAP_TIMEOUT = 1000;
-const DOUBLE_TAP_THRESHOLD = 50;
+const DOUBLE_TAP_TIMEOUT = 1;
+const DOUBLE_TAP_THRESHOLD = 1;
 
 // Security types
 const securityTypeNone              = 1;

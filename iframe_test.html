@@ -67,6 +67,14 @@
             background-color: #5e5e5e;
         }
 
+        .keyboard-btn.auto-mode {
+            background-color: #0066cc;
+        }
+
+        .keyboard-btn.auto-mode:hover {
+            background-color: #0077ee;
+        }
+
         .iframe-container {
             flex: 1;
             width: 100%;
@@ -103,69 +111,109 @@
         </iframe>
     </div>
 
-    <script>
-        const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-        const keyboardBtn = document.getElementById('keyboard-toggle');
-        const iframeContainer = document.getElementById('iframe-container');
-        const vncIframe = document.getElementById('vnc-iframe');
+<script>
+    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
-        // Hide keyboard button on non-touch devices
-        if (!isTouchDevice) {
-            keyboardBtn.style.display = 'none';
+    const keyboardBtn = document.getElementById('keyboard-toggle');
+    const iframeContainer = document.getElementById('iframe-container');
+    const vncIframe = document.getElementById('vnc-iframe');
+
+    // Hide keyboard button on non-touch devices
+    if (!isTouchDevice) {
+        keyboardBtn.style.display = 'none';
+    }
+
+    function getNoVNCKeyboardState() {
+        try {
+            const btn =
+                vncIframe.contentDocument.getElementById('noVNC_keyboard_button');
+            if (!btn) return null;
+
+            const pressed =
+                btn.getAttribute('aria-pressed') === 'true' ||
+                btn.classList.contains('noVNC_selected');
+
+            return pressed ? 'shown' : 'hidden';
+        } catch {
+            return null;
         }
+    }
 
-        function triggerNoVNCKeyboard() {
+    function setNoVNCKeyboardState(desired) {
+        try {
+            const current = getNoVNCKeyboardState();
+            if (current && current !== desired) {
+                const btn =
+                    vncIframe.contentDocument.getElementById('noVNC_keyboard_button');
+                if (btn) btn.click();
+            }
+        } catch {}
+    }
+
+    function toggleNoVNCKeyboard() {
+        try {
+            const btn =
+                vncIframe.contentDocument.getElementById('noVNC_keyboard_button');
+            if (btn) btn.click();
+        } catch {}
+    }
+
+    function updateLayout() {
+        const titlebarHeight =
+            document.querySelector('.titlebar').offsetHeight;
+        const availableHeight =
+            (window.visualViewport
+                ? window.visualViewport.height
+                : window.innerHeight) - titlebarHeight;
+
+        iframeContainer.style.height = `${availableHeight}px`;
+        vncIframe.style.height = `${availableHeight}px`;
+    }
+
+    // --- SSE (Android / non-iOS only)
+    function connectSSE() {
+        const eventSource = new EventSource('/keyboard-events');
+
+        eventSource.onmessage = (event) => {
             try {
-                // Get the noVNC keyboard button inside the iframe
-                const noVNCKeyboardBtn = vncIframe.contentDocument.getElementById('noVNC_keyboard_button');
-                if (noVNCKeyboardBtn) {
-                    // Simulate a click on noVNC's keyboard button
-                    noVNCKeyboardBtn.click();
+                const data = JSON.parse(event.data);
+                if (data.keyboard_status === 'show') {
+                    setNoVNCKeyboardState('shown');
+                } else if (data.keyboard_status === 'hide') {
+                    setNoVNCKeyboardState('hidden');
                 }
-            } catch (err) {
-                console.log('Cannot access iframe content - cross-origin restriction');
-            }
-        }
+            } catch {}
+        };
 
-        function updateLayout() {
-            // Use Visual Viewport API for accurate measurements with keyboard
-            if (window.visualViewport) {
-                const titlebarHeight = document.querySelector('.titlebar').offsetHeight;
-                const availableHeight = window.visualViewport.height - titlebarHeight;
-                
-                // Set iframe container to exact available height
-                iframeContainer.style.height = `${availableHeight}px`;
-                
-                // Force iframe resize
-                vncIframe.style.height = `${availableHeight}px`;
-            } else {
-                // Fallback for browsers without Visual Viewport API
-                const titlebarHeight = document.querySelector('.titlebar').offsetHeight;
-                const availableHeight = window.innerHeight - titlebarHeight;
-                
-                iframeContainer.style.height = `${availableHeight}px`;
-                vncIframe.style.height = `${availableHeight}px`;
-            }
-        }
+        eventSource.onerror = () => {
+            eventSource.close();
+            setTimeout(connectSSE, 5000);
+        };
+    }
 
-        // Keyboard button click handler - just trigger noVNC's keyboard
-        keyboardBtn.addEventListener('click', triggerNoVNCKeyboard);
+    // --- Button = FORCE OVERRIDE (always)
+    keyboardBtn.addEventListener('click', () => {
+        toggleNoVNCKeyboard();
+    });
 
-        // Use Visual Viewport API for accurate keyboard detection
-        if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', updateLayout);
-            window.visualViewport.addEventListener('scroll', updateLayout);
-        }
+    // --- Viewport handling
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', updateLayout);
+        window.visualViewport.addEventListener('scroll', updateLayout);
+    }
+    window.addEventListener('resize', updateLayout);
+    window.addEventListener('orientationchange', () =>
+        setTimeout(updateLayout, 300)
+    );
 
-        // Fallback resize listener
-        window.addEventListener('resize', updateLayout);
-        
-        window.addEventListener('orientationchange', () => {
-            setTimeout(updateLayout, 300);
-        });
+    // --- Init
+    updateLayout();
 
-        // Initial layout
-        updateLayout();
-    </script>
+    if (isTouchDevice && !isIOS) {
+        connectSSE();
+    }
+</script>
+ 
 </body>
 </html>
